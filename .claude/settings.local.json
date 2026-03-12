@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xcodebuild -project Routinely.xcodeproj -scheme Routinely -destination 'platform=iOS Simulator,name=iPhone 16' build 2>&1 | tail -50)",
+      "Bash(xcodebuild -project Routinely.xcodeproj -scheme Routinely -sdk iphonesimulator build 2>&1 | tail -100)",
+      "Bash(xcodebuild -project Routinely.xcodeproj -scheme Routinely -sdk iphonesimulator build 2>&1 | grep -A 5 \"error:\")",
+      "Bash(xcodebuild -project Routinely.xcodeproj -scheme Routinely -sdk iphonesimulator build 2>&1 | grep -E \"\\(error:|warning:|BUILD\\)\" | tail -20)",
+      "Bash(xcodebuild -project Routinely.xcodeproj -scheme Routinely -sdk iphonesimulator build 2>&1 | grep -E \"\\(error:|warning:|BUILD\\)\")",
+      "Skill(swift-best-practices)",
+      "Bash(xcodebuild -project Routinely.xcodeproj -scheme Routinely -sdk iphonesimulator build 2>&1 | tail -20)",
+      "Bash(xcodebuild -project Routinely.xcodeproj -scheme Routinely -sdk iphonesimulator build 2>&1 | tail -30)"
+    ]
+  }
+}
