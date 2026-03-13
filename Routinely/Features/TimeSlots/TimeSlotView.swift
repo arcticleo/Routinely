@@ -209,7 +209,7 @@ struct ActivityCompletionRow: View {
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.secondarySystemGroupedBackground))
+                .fill(timeSlot.swiftUIColor.opacity(0.1))
         )
     }
 }
