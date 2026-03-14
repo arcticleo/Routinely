@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import SFSymbols
 
 // Represents a weekday + time slot combination
 struct ScheduleSlot: Hashable {
@@ -22,27 +23,10 @@ struct ActivityFormView: View {
 
     @State private var name: String = ""
     @State private var icon: String = "star.fill"
+    @State private var color: Color = .blue
     @State private var selectedScheduleSlots: Set<ScheduleSlot> = []
 
     private var isEditing: Bool { activity != nil }
-
-    private let commonIcons = [
-        "star.fill", "heart.fill", "bolt.fill", "flame.fill", "drop.fill",
-        "moon.fill", "sun.max.fill", "cloud.fill", "leaf.fill", "pawprint.fill",
-        "figure.run", "figure.walk", "figure.mind.and.body",
-        "book.fill", "pencil", "paintbrush.fill", "guitars.fill",
-        "desktopcomputer", "iphone", "tv.fill", "gamecontroller.fill",
-        "fork.knife", "cup.and.saucer.fill", "takeoutbag.and.cup.and.straw.fill",
-        "bed.double.fill", "shower.fill", "tooth.fill",
-        "cart.fill", "bag.fill", "gift.fill",
-        "dollarsign.circle.fill", "creditcard.fill",
-        "person.fill", "person.2.fill", "person.3.fill",
-        "house.fill", "car.fill", "bicycle", "airplane",
-        "phone.fill", "envelope.fill", "bubble.left.fill",
-        "calendar", "clock.fill", "alarm.fill", "timer",
-        "checkmark.circle.fill", "xmark.circle.fill",
-        "exclamationmark.circle.fill", "questionmark.circle.fill"
-    ]
 
     // Calendar weekdays (1 = Sunday, 2 = Monday, ... 7 = Saturday)
     private let weekdays = Array(1...7)
@@ -54,7 +38,10 @@ struct ActivityFormView: View {
                     TextField("Activity Name", text: $name)
                         .font(.headline)
 
-                    IconPicker(selection: $icon, icons: commonIcons)
+                    SFSymbolPicker("Icon", selection: $icon)
+
+                    ColorPalettePicker(selection: $color, icon: $icon)
+
                 }
 
                 Section("Schedule") {
@@ -94,6 +81,7 @@ struct ActivityFormView: View {
                 if let activity = activity {
                     name = activity.name
                     icon = activity.icon
+                    color = activity.swiftUIColor
                     selectedScheduleSlots = Set(activity.timeSlots?.map {
                         ScheduleSlot(weekday: $0.weekday, timeSlot: $0.timeSlot)
                     } ?? [])
@@ -103,10 +91,13 @@ struct ActivityFormView: View {
     }
 
     private func saveActivity() {
+        let hexColor = color.toHex() ?? "#007AFF"
+
         if let activity = activity {
             // Update existing activity
             activity.name = name
             activity.icon = icon
+            activity.color = hexColor
 
             // Update time slots: remove old ones not in selection
             let existingTimeSlots = activity.timeSlots ?? []
@@ -135,7 +126,7 @@ struct ActivityFormView: View {
             }
         } else {
             // Create new activity
-            let newActivity = Activity(name: name, icon: icon)
+            let newActivity = Activity(name: name, icon: icon, color: hexColor)
             modelContext.insert(newActivity)
 
             // Create time slot associations
@@ -159,31 +150,6 @@ struct ActivityFormView: View {
             try? modelContext.save()
         }
         dismiss()
-    }
-}
-
-// MARK: - Icon Picker
-struct IconPicker: View {
-    @Binding var selection: String
-    let icons: [String]
-
-    var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 44))], spacing: 12) {
-            ForEach(icons, id: \.self) { icon in
-                Button {
-                    selection = icon
-                } label: {
-                    Image(systemName: icon)
-                        .font(.title2)
-                        .foregroundStyle(selection == icon ? .white : .primary)
-                        .frame(width: 44, height: 44)
-                        .background(selection == icon ? Color.accentColor : Color.gray.opacity(0.2))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.vertical, 8)
     }
 }
 
@@ -271,10 +237,204 @@ struct ScheduleCell: View {
                 .overlay(
                     Image(systemName: isSelected ? "checkmark" : "")
                         .font(.caption)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.white)
                 )
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Color Palette Picker
+struct ColorPalettePicker: View {
+    @Binding var selection: Color
+    @Binding var icon: String
+    @State private var showingCustomColorPicker = false
+    @State private var customColor: Color = .blue
+
+    // White + ROYGBIV colors
+    private let presetColors: [Color] = [
+        .white,      // Default
+        .red,        // R
+        .orange,     // O
+        .yellow,     // Y
+        .green,      // G
+        .blue,       // B
+        .indigo,     // I
+        .purple      // V (violet)
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Color")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    // Preset color buttons (8 colors)
+                    ForEach(0..<presetColors.count, id: \.self) { index in
+                        let color = presetColors[index]
+                        ColorButton(
+                            color: color,
+                            isSelected: isApproximatelyEqual(selection, color)
+                        ) {
+                            selection = color
+                        }
+                    }
+
+                    // Custom color button
+                    CustomColorButton(
+                        selectedColor: selection,
+                        isSelected: !isPresetColor(selection),
+                        isCustomColor: !isPresetColor(selection)
+                    ) {
+                        customColor = selection
+                        showingCustomColorPicker = true
+                    }
+                }
+                .padding(.horizontal, 4)
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(.viewAligned)
+        }
+        .sheet(isPresented: $showingCustomColorPicker) {
+            CustomColorPickerSheet(selection: $selection, customColor: $customColor, icon: icon)
+        }
+    }
+
+    private func isPresetColor(_ color: Color) -> Bool {
+        presetColors.contains { isApproximatelyEqual(color, $0) }
+    }
+
+    private func isApproximatelyEqual(_ c1: Color, _ c2: Color) -> Bool {
+        // Convert to hex for comparison
+        let h1 = c1.toHex() ?? ""
+        let h2 = c2.toHex() ?? ""
+        return h1 == h2
+    }
+}
+
+struct ColorButton: View {
+    let color: Color
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Circle()
+                .fill(color)
+                .frame(width: 32, height: 32)
+                .overlay(
+                    Circle()
+                        .stroke(isSelected ? Color.primary : Color.clear, lineWidth: 3)
+                )
+                .overlay(
+                    // Checkmark for white since border might not show well
+                    Image(systemName: isSelected ? "checkmark" : "")
+                        .font(.caption.bold())
+                        .foregroundColor(color == Color.white ? Color.primary : Color.white)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct CustomColorButton: View {
+    let selectedColor: Color
+    let isSelected: Bool
+    let isCustomColor: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                // If custom color is selected, show it; otherwise show rainbow gradient
+                if isCustomColor {
+                    Circle()
+                        .fill(selectedColor)
+                        .frame(width: 32, height: 32)
+                } else {
+                    Circle()
+                        .fill(
+                            AngularGradient(
+                                colors: [.red, .orange, .yellow, .green, .blue, .purple, .red],
+                                center: .center
+                            )
+                        )
+                        .frame(width: 32, height: 32)
+                }
+
+                // Selection ring
+                Circle()
+                    .stroke(isSelected ? Color.primary : Color.clear, lineWidth: 3)
+                    .frame(width: 32, height: 32)
+
+                // Show plus if not custom color, checkmark if custom color is selected
+                Image(systemName: isCustomColor ? "checkmark" : "plus")
+                    .font(.caption.bold())
+                    .foregroundStyle(isCustomColor && selectedColor != Color.white ? Color.white : Color.primary)
+                    .shadow(radius: 1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct CustomColorPickerSheet: View {
+    @Binding var selection: Color
+    @Binding var customColor: Color
+    var icon: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    HStack {
+                        Spacer()
+                        Image(systemName: icon)
+                            .font(.system(size: 60))
+                            .foregroundStyle(customColor)
+                        Spacer()
+                    }
+                    .padding(.vertical)
+                }
+
+                Section("Custom Color") {
+                    ColorPicker("Select Color", selection: $customColor, supportsOpacity: false)
+                        .labelsHidden()
+                }
+            }
+            .navigationTitle("Custom Color")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        selection = customColor
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Color Extension for Hex Conversion
+extension Color {
+    func toHex() -> String? {
+        let uic = UIColor(self)
+        guard let components = uic.cgColor.components, components.count >= 3 else {
+            return nil
+        }
+        let r = Float(components[0])
+        let g = Float(components[1])
+        let b = Float(components[2])
+        return String(format: "#%02lX%02lX%02lX", lroundf(r * 255), lroundf(g * 255), lroundf(b * 255))
     }
 }
 

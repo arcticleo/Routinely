@@ -17,29 +17,46 @@ struct ActivityListView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(activities) { activity in
-                    ActivityRowView(activity: activity)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            editingActivity = activity
-                        }
-                        .swipeActions {
-                            Button(role: .destructive) {
-                                deleteActivity(activity)
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-
-                            Button {
+            ZStack {
+                List {
+                    ForEach(activities) { activity in
+                        ActivityRowView(activity: activity)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
                                 editingActivity = activity
-                            } label: {
-                                Label("Edit", systemImage: "pencil")
                             }
-                            .tint(.indigo)
-                        }
+                            .swipeActions {
+                                Button(role: .destructive) {
+                                    deleteActivity(activity)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+
+                                Button {
+                                    editingActivity = activity
+                                } label: {
+                                    Label("Edit", systemImage: "pencil")
+                                }
+                                .tint(.indigo)
+                            }
+                    }
+                    .onMove(perform: moveActivities)
                 }
-                .onMove(perform: moveActivities)
+
+                if activities.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Activities", systemImage: "list.bullet")
+                    } description: {
+                        Text("Add your first activity or populate with samples.")
+                    } actions: {
+                        Button {
+                            Activity.addSamples(to: modelContext)
+                        } label: {
+                            Label("Add Sample Activities", systemImage: "wand.and.stars")
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
             }
             .navigationTitle("Activities")
             .toolbar {

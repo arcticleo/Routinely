@@ -14,7 +14,7 @@ struct ActivityRowView: View {
         HStack {
             Image(systemName: activity.icon)
                 .font(.title2)
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(activity.swiftUIColor)
                 .frame(width: 40)
 
             VStack(alignment: .leading, spacing: 4) {

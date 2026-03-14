@@ -1,0 +1,15 @@
+{
+  "originHash" : "80f5c26e981634d249d8ed94829858578948ca0e2eda54d4e19cca2cd1c65be3",
+  "pins" : [
+    {
+      "identity" : "sfsymbols",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/simonbs/SFSymbols.git",
+      "state" : {
+        "revision" : "119b5312f3c4a3a7febbcd5a2ef88c59a4c89bbb",
+        "version" : "1.4.0"
+      }
+    }
+  ],
+  "version" : 3
+}

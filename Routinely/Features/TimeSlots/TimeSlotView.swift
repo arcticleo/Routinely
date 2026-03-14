@@ -116,10 +116,10 @@ struct TimeSlotView: View {
 
     private func startTimer() {
         // Update every minute to check for time slot changes
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
             let newTimeSlot = TimeSlot.current
             if newTimeSlot != timeSlot {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                     timeSlot = newTimeSlot
                 }
             }
@@ -204,7 +204,7 @@ struct ActivityCompletionRow: View {
 
             Image(systemName: activity.icon)
                 .font(.title3)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(activity.swiftUIColor)
         }
         .padding()
         .background(
