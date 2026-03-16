@@ -7,11 +7,13 @@
 
 import SwiftUI
 import SwiftData
+import WidgetKit
 
 struct CompletionButton: View {
     let activity: Activity
     let timeSlot: TimeSlot
     let weekday: Int  // 1 = Sunday, 2 = Monday, ... 7 = Saturday
+    var onToggle: (() -> Void)? = nil
 
     @Environment(\.modelContext) private var modelContext
 
@@ -50,6 +52,18 @@ struct CompletionButton: View {
                 modelContext.insert(completion)
             }
             try? modelContext.save()
+
+            // Update badge if this is the current time slot
+            let currentWeekday = Calendar.current.component(.weekday, from: Date())
+            if weekday == currentWeekday && timeSlot == TimeSlot.current {
+                BadgeManager.shared.updateBadge(in: modelContext)
+            }
+
+            // Reload widget timeline
+            WidgetCenter.shared.reloadAllTimelines()
+
+            // Notify parent to refresh
+            onToggle?()
         }
     }
 }

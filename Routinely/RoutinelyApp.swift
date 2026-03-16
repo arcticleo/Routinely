@@ -25,7 +25,8 @@ struct RoutinelyApp: App {
         let modelConfiguration = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: false,
-            cloudKitDatabase: .automatic // Optional iCloud sync
+            groupContainer: .identifier(appGroupIdentifier),
+            cloudKitDatabase: .automatic
         )
 
         do {

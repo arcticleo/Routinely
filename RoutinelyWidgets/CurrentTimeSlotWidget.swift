@@ -8,20 +8,33 @@
 import WidgetKit
 import SwiftUI
 import SwiftData
+import AppIntents
 
 struct Provider: TimelineProvider {
+    let container: ModelContainer
+
+    init() {
+        // Access the shared SwiftData container via App Group
+        self.container = try! ModelContainer(
+            for: Activity.self, ActivityTimeSlot.self, Completion.self, UserPreferences.self,
+            configurations: ModelConfiguration(
+                groupContainer: .identifier("group.com.medlund.Routinely")
+            )
+        )
+    }
+
     func placeholder(in context: Context) -> SimpleEntry {
         SimpleEntry(date: Date(), timeSlot: .morning, activities: [])
     }
 
     func getSnapshot(in context: Context, completion: @escaping (SimpleEntry) -> Void) {
-        let entry = SimpleEntry(date: Date(), timeSlot: TimeSlot.current, activities: [])
+        let entry = fetchEntry(for: Date())
         completion(entry)
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<Entry>) -> Void) {
         let currentDate = Date()
-        let currentTimeSlot = TimeSlot.current
+        let entry = fetchEntry(for: currentDate)
 
         // Calculate next time slot change (every 3 hours)
         let calendar = Calendar.current
@@ -34,9 +47,40 @@ struct Provider: TimelineProvider {
 
         let nextUpdate = calendar.date(from: components)!
 
-        let entry = SimpleEntry(date: currentDate, timeSlot: currentTimeSlot, activities: [])
         let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
         completion(timeline)
+    }
+
+    private func fetchEntry(for date: Date) -> SimpleEntry {
+        let context = ModelContext(container)
+        let currentWeekday = Calendar.current.component(.weekday, from: date)
+        let currentTimeSlot = TimeSlot.current
+
+        // Fetch all activity time slots
+        let descriptor = FetchDescriptor<ActivityTimeSlot>()
+        guard let allSlots = try? context.fetch(descriptor) else {
+            return SimpleEntry(date: date, timeSlot: currentTimeSlot, activities: [])
+        }
+
+        // Filter for current weekday and time slot
+        let slots = allSlots.filter {
+            $0.weekday == currentWeekday && $0.timeSlot == currentTimeSlot
+        }
+
+        // Build widget activities (only incomplete)
+        let activities = slots.compactMap { slot -> WidgetActivity? in
+            guard let activity = slot.activity else { return nil }
+            let isCompleted = activity.isCompleted(for: currentWeekday, timeSlot: currentTimeSlot)
+            guard !isCompleted else { return nil }
+            return WidgetActivity(
+                id: activity.id,
+                name: activity.name,
+                icon: activity.icon,
+                isCompleted: false
+            )
+        }.sorted { $0.name < $1.name }
+
+        return SimpleEntry(date: date, timeSlot: currentTimeSlot, activities: activities)
     }
 }
 
@@ -70,8 +114,8 @@ struct CurrentTimeSlotWidgetEntryView: View {
 
                 Spacer()
             }
-            .padding(.horizontal)
-            .padding(.top, 8)
+            .padding(.horizontal, 4)
+            .padding(.top, 0)
 
             if entry.activities.isEmpty {
                 ContentUnavailableView {
@@ -83,8 +127,8 @@ struct CurrentTimeSlotWidgetEntryView: View {
                 VStack(spacing: 0) {
                     ForEach(entry.activities.prefix(activityCount)) { activity in
                         WidgetActivityRow(activity: activity, timeSlot: entry.timeSlot)
-                            .widgetURL(URL(string: "routinely://complete?activity=\(activity.id)&timeSlot=\(entry.timeSlot.rawValue)"))
                     }
+                    Spacer()
                 }
             }
         }
@@ -115,19 +159,38 @@ struct WidgetActivityRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: activity.isCompleted ? "checkmark.circle.fill" : "circle")
-                .symbolRenderingMode(.palette)
-                .foregroundStyle(activity.isCompleted ? .white : .secondary, timeSlot.swiftUIColor)
-                .font(.system(size: 14))
+            if #available(iOS 17.0, *) {
+                // Interactive button for iOS 17+
+                Button(intent: CompleteActivityIntent(
+                    activityID: activity.id.uuidString,
+                    timeSlot: timeSlot.rawValue
+                )) {
+                    Image(systemName: activity.isCompleted ? "checkmark.circle.fill" : "circle")
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(activity.isCompleted ? .white : .secondary, timeSlot.swiftUIColor)
+                        .font(.system(size: 14))
+                }
+                .buttonStyle(.borderless)
 
-            Text(activity.name)
-                .font(.system(size: 14, weight: .medium))
-                .lineLimit(1)
+                Text(activity.name)
+                    .font(.system(size: 14, weight: .medium))
+                    .lineLimit(1)
+            } else {
+                // Fallback for older iOS versions
+                Image(systemName: activity.isCompleted ? "checkmark.circle.fill" : "circle")
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(activity.isCompleted ? .white : .secondary, timeSlot.swiftUIColor)
+                    .font(.system(size: 14))
+
+                Text(activity.name)
+                    .font(.system(size: 14, weight: .medium))
+                    .lineLimit(1)
+            }
 
             Spacer()
         }
         .padding(.horizontal)
-        .padding(.vertical, 6)
+        .padding(.vertical, 4)
     }
 }
 
@@ -147,8 +210,5 @@ struct CurrentTimeSlotWidget: Widget {
 #Preview(as: .systemSmall) {
     CurrentTimeSlotWidget()
 } timeline: {
-    SimpleEntry(date: .now, timeSlot: .morning, activities: [
-        WidgetActivity(id: UUID(), name: "Exercise", icon: "figure.run", isCompleted: true),
-        WidgetActivity(id: UUID(), name: "Meditation", icon: "leaf.fill", isCompleted: false)
-    ])
+    SimpleEntry(date: Date(), timeSlot: .morning, activities: [])
 }

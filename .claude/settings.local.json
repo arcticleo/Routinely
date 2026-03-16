@@ -8,7 +8,16 @@
       "Bash(xcodebuild -project Routinely.xcodeproj -scheme Routinely -sdk iphonesimulator build 2>&1 | grep -E \"\\(error:|warning:|BUILD\\)\")",
       "Skill(swift-best-practices)",
       "Bash(xcodebuild -project Routinely.xcodeproj -scheme Routinely -sdk iphonesimulator build 2>&1 | tail -20)",
-      "Bash(xcodebuild -project Routinely.xcodeproj -scheme Routinely -sdk iphonesimulator build 2>&1 | tail -30)"
+      "Bash(xcodebuild -project Routinely.xcodeproj -scheme Routinely -sdk iphonesimulator build 2>&1 | tail -30)",
+      "Bash(grep -l \"@main\" /Users/medlund/Coding/Agentic/Routinely/Routinely/*.swift /Users/medlund/Coding/Agentic/Routinely/RoutinelyWidgets/*.swift 2>/dev/null)",
+      "Bash(xcodebuild -project Routinely.xcodeproj -scheme Routinely -destination 'platform=iOS,name=17Pro' build 2>&1 | tail -5)",
+      "Bash(xcodebuild -project Routinely.xcodeproj -scheme Routinely -destination 'platform=iOS,name=17Pro' build 2>&1 | grep -E '\\(error:|BUILD\\)' | head -10)",
+      "Bash(xcodebuild -project Routinely.xcodeproj -scheme Routinely -destination 'platform=iOS,name=17Pro' build 2>&1 | grep -E '\\(error:|BUILD\\)' | head -5)",
+      "Bash(ls -la /Users/medlund/Coding/Agentic/Routinely/*.xcodeproj/ 2>/dev/null || echo \"No xcodeproj in root\")",
+      "Bash(xcodebuild -project Routinely.xcodeproj -scheme Routinely -destination 'platform=iOS,name=17Pro' build 2>&1 | grep -E '\\(error:|warning:\\)' | head -30)",
+      "WebFetch(domain:medium.com)",
+      "WebSearch",
+      "mcp__cupertino__search_docs"
     ]
   }
 }

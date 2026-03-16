@@ -10,6 +10,7 @@ import SwiftData
 
 struct RoutinelyView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @Query private var preferences: [UserPreferences]
 
     var body: some View {
@@ -28,6 +29,12 @@ struct RoutinelyView: View {
         }
         .onAppear {
             ensureUserPreferencesExist()
+        }
+        .onChange(of: scenePhase) {
+            if scenePhase == .active {
+                // Refresh to pick up changes from widget
+                BadgeManager.shared.updateBadge(in: modelContext)
+            }
         }
     }
 

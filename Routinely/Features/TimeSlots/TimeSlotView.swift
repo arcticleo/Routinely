@@ -7,13 +7,16 @@
 
 import SwiftUI
 import SwiftData
+import UserNotifications
+import WidgetKit
 
 struct TimeSlotView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @Query private var preferences: [UserPreferences]
 
-    @Query private var allActivityTimeSlots: [ActivityTimeSlot]
-
+    @State private var allActivityTimeSlots: [ActivityTimeSlot] = []
+    @State private var completedActivityIDs: Set<UUID> = []
     @State private var timeSlot: TimeSlot = TimeSlot.current
     @State private var showCompleted = false
     @State private var timer: Timer? = nil
@@ -40,14 +43,14 @@ struct TimeSlotView: View {
             return activitiesForCurrentSlot
         } else {
             return activitiesForCurrentSlot.filter { activity in
-                !activity.isCompleted(for: currentWeekday, timeSlot: timeSlot)
+                !completedActivityIDs.contains(activity.id)
             }
         }
     }
 
     // Count of completed activities for this slot
     var completedCount: Int {
-        activitiesForCurrentSlot.filter { $0.isCompleted(for: currentWeekday, timeSlot: timeSlot) }.count
+        activitiesForCurrentSlot.filter { completedActivityIDs.contains($0.id) }.count
     }
 
     var totalCount: Int {
@@ -82,7 +85,13 @@ struct TimeSlotView: View {
                     } else {
                         LazyVStack(spacing: 12) {
                             ForEach(visibleActivities) { activity in
-                                ActivityCompletionRow(activity: activity, timeSlot: timeSlot, weekday: currentWeekday)
+                                ActivityCompletionRow(
+                                    activity: activity,
+                                    timeSlot: timeSlot,
+                                    weekday: currentWeekday,
+                                    isCompleted: completedActivityIDs.contains(activity.id),
+                                    onToggle: fetchActivityTimeSlots
+                                )
                             }
                         }
                         .padding(.horizontal)
@@ -107,9 +116,31 @@ struct TimeSlotView: View {
             }
             .onAppear {
                 startTimer()
+                fetchActivityTimeSlots()
+                BadgeManager.shared.requestNotificationPermission()
+                BadgeManager.shared.updateBadge(in: modelContext)
             }
             .onDisappear {
                 stopTimer()
+            }
+            .onChange(of: visibleActivities.count) { _, _ in
+                BadgeManager.shared.updateBadge(in: modelContext)
+            }
+            .onChange(of: timeSlot) { _, _ in
+                BadgeManager.shared.updateBadge(in: modelContext)
+                WidgetCenter.shared.reloadAllTimelines()
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                if newPhase == .background {
+                    BadgeManager.shared.updateBadge(in: modelContext)
+                    BadgeManager.shared.scheduleTimeSlotNotifications(in: modelContext)
+                    WidgetCenter.shared.reloadAllTimelines()
+                } else if newPhase == .active {
+                    // Re-fetch to pick up changes from widget
+                    fetchActivityTimeSlots()
+                    BadgeManager.shared.updateBadge(in: modelContext)
+                    WidgetCenter.shared.reloadAllTimelines()
+                }
             }
         }
     }
@@ -131,6 +162,28 @@ struct TimeSlotView: View {
     private func stopTimer() {
         timer?.invalidate()
         timer = nil
+    }
+
+    private func fetchActivityTimeSlots() {
+        // Fetch time slots
+        let slotDescriptor = FetchDescriptor<ActivityTimeSlot>()
+        allActivityTimeSlots = (try? modelContext.fetch(slotDescriptor)) ?? []
+
+        // Fetch completions directly for current week
+        let calendar = Calendar.current
+        let weekStart = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date()))!
+        let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart)!
+
+        let completionDescriptor = FetchDescriptor<Completion>(
+            predicate: #Predicate { completion in
+                completion.completedAt >= weekStart && completion.completedAt < weekEnd
+            }
+        )
+        let completions = (try? modelContext.fetch(completionDescriptor)) ?? []
+        completedActivityIDs = Set(completions.filter {
+            $0.weekday == currentWeekday &&
+            $0.timeSlot == timeSlot
+        }.compactMap { $0.activity?.id })
     }
 }
 
@@ -182,18 +235,20 @@ struct ActivityCompletionRow: View {
     let activity: Activity
     let timeSlot: TimeSlot
     let weekday: Int  // 1 = Sunday, 2 = Monday, ... 7 = Saturday
+    let isCompleted: Bool
+    var onToggle: (() -> Void)? = nil
 
     @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         HStack(spacing: 16) {
-            CompletionButton(activity: activity, timeSlot: timeSlot, weekday: weekday)
+            CompletionButton(activity: activity, timeSlot: timeSlot, weekday: weekday, onToggle: onToggle)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(activity.name)
                     .font(.headline)
 
-                if activity.isCompleted(for: weekday, timeSlot: timeSlot) {
+                if isCompleted {
                     Text("Completed")
                         .font(.caption)
                         .foregroundStyle(.secondary)

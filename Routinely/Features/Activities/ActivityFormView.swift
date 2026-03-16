@@ -235,33 +235,80 @@ struct ScheduleCell: View {
                 )
                 .frame(height: 36)
                 .overlay(
-                    Image(systemName: isSelected ? "checkmark" : "")
-                        .font(.caption)
-                        .foregroundStyle(Color.white)
+                    Group {
+                        if isSelected {
+                            Image(systemName: "checkmark")
+                                .font(.caption)
+                                .foregroundStyle(Color.white)
+                        }
+                    }
                 )
         }
         .buttonStyle(.plain)
     }
 }
 
-// MARK: - Color Palette Picker
+// MARK: - Color Grid Picker
 struct ColorPalettePicker: View {
     @Binding var selection: Color
     @Binding var icon: String
-    @State private var showingCustomColorPicker = false
-    @State private var customColor: Color = .blue
+    @State private var showingColorGrid = false
 
-    // White + ROYGBIV colors
-    private let presetColors: [Color] = [
-        .white,      // Default
-        .red,        // R
-        .orange,     // O
-        .yellow,     // Y
-        .green,      // G
-        .blue,       // B
-        .indigo,     // I
-        .purple      // V (violet)
-    ]
+    // Generate 64 web-safe colors (33, 66, 99, CC for each channel, excluding pure black/white)
+    private let gridColors: [Color] = {
+        let values: [UInt8] = [0x33, 0x66, 0x99, 0xCC]
+        var colors: [(color: Color, brightness: Double, hue: Double)] = []
+
+        for r in values {
+            for g in values {
+                for b in values {
+                    // Skip pure black and pure white
+                    if (r == 0x33 && g == 0x33 && b == 0x33) ||
+                       (r == 0xCC && g == 0xCC && b == 0xCC) {
+                        // Keep these - they're not pure black/white
+                    }
+
+                    let color = Color(red: Double(r) / 255.0,
+                                     green: Double(g) / 255.0,
+                                     blue: Double(b) / 255.0)
+
+                    // Calculate brightness (luminance)
+                    let brightness = 0.299 * Double(r) + 0.587 * Double(g) + 0.114 * Double(b)
+
+                    // Calculate hue
+                    let rd = Double(r) / 255.0
+                    let gd = Double(g) / 255.0
+                    let bd = Double(b) / 255.0
+                    let maxVal = max(rd, max(gd, bd))
+                    let minVal = min(rd, min(gd, bd))
+                    let delta = maxVal - minVal
+
+                    var hue: Double = 0
+                    if delta > 0 {
+                        if maxVal == rd {
+                            hue = 60 * ((gd - bd) / delta + (gd < bd ? 6 : 0))
+                        } else if maxVal == gd {
+                            hue = 60 * ((bd - rd) / delta + 2)
+                        } else {
+                            hue = 60 * ((rd - gd) / delta + 4)
+                        }
+                    }
+
+                    colors.append((color, brightness, hue))
+                }
+            }
+        }
+
+        // Sort by brightness (primary), then by hue (secondary)
+        colors.sort { a, b in
+            if a.brightness != b.brightness {
+                return a.brightness < b.brightness
+            }
+            return a.hue < b.hue
+        }
+
+        return colors.map { $0.color }
+    }()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -269,143 +316,77 @@ struct ColorPalettePicker: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    // Preset color buttons (8 colors)
-                    ForEach(0..<presetColors.count, id: \.self) { index in
-                        let color = presetColors[index]
-                        ColorButton(
-                            color: color,
-                            isSelected: isApproximatelyEqual(selection, color)
-                        ) {
-                            selection = color
-                        }
-                    }
+            Button {
+                showingColorGrid = true
+            } label: {
+                HStack {
+                    Image(systemName: icon.isEmpty ? "star.fill" : icon)
+                        .font(.title2)
+                        .foregroundStyle(selection)
 
-                    // Custom color button
-                    CustomColorButton(
-                        selectedColor: selection,
-                        isSelected: !isPresetColor(selection),
-                        isCustomColor: !isPresetColor(selection)
-                    ) {
-                        customColor = selection
-                        showingCustomColorPicker = true
-                    }
+                    Text(selection.toHex()?.uppercased() ?? "Custom")
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(.secondary)
                 }
-                .padding(.horizontal, 4)
-                .scrollTargetLayout()
-            }
-            .scrollTargetBehavior(.viewAligned)
-        }
-        .sheet(isPresented: $showingCustomColorPicker) {
-            CustomColorPickerSheet(selection: $selection, customColor: $customColor, icon: icon)
-        }
-    }
-
-    private func isPresetColor(_ color: Color) -> Bool {
-        presetColors.contains { isApproximatelyEqual(color, $0) }
-    }
-
-    private func isApproximatelyEqual(_ c1: Color, _ c2: Color) -> Bool {
-        // Convert to hex for comparison
-        let h1 = c1.toHex() ?? ""
-        let h2 = c2.toHex() ?? ""
-        return h1 == h2
-    }
-}
-
-struct ColorButton: View {
-    let color: Color
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Circle()
-                .fill(color)
-                .frame(width: 32, height: 32)
-                .overlay(
-                    Circle()
-                        .stroke(isSelected ? Color.primary : Color.clear, lineWidth: 3)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color(.systemGray6))
                 )
-                .overlay(
-                    // Checkmark for white since border might not show well
-                    Image(systemName: isSelected ? "checkmark" : "")
-                        .font(.caption.bold())
-                        .foregroundColor(color == Color.white ? Color.primary : Color.white)
-                )
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-struct CustomColorButton: View {
-    let selectedColor: Color
-    let isSelected: Bool
-    let isCustomColor: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            ZStack {
-                // If custom color is selected, show it; otherwise show rainbow gradient
-                if isCustomColor {
-                    Circle()
-                        .fill(selectedColor)
-                        .frame(width: 32, height: 32)
-                } else {
-                    Circle()
-                        .fill(
-                            AngularGradient(
-                                colors: [.red, .orange, .yellow, .green, .blue, .purple, .red],
-                                center: .center
-                            )
-                        )
-                        .frame(width: 32, height: 32)
-                }
-
-                // Selection ring
-                Circle()
-                    .stroke(isSelected ? Color.primary : Color.clear, lineWidth: 3)
-                    .frame(width: 32, height: 32)
-
-                // Show plus if not custom color, checkmark if custom color is selected
-                Image(systemName: isCustomColor ? "checkmark" : "plus")
-                    .font(.caption.bold())
-                    .foregroundStyle(isCustomColor && selectedColor != Color.white ? Color.white : Color.primary)
-                    .shadow(radius: 1)
             }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+        .sheet(isPresented: $showingColorGrid) {
+            ColorGridSheet(selection: $selection, gridColors: gridColors, icon: icon)
+        }
     }
 }
 
-struct CustomColorPickerSheet: View {
+struct ColorGridSheet: View {
     @Binding var selection: Color
-    @Binding var customColor: Color
+    let gridColors: [Color]
     var icon: String
     @Environment(\.dismiss) private var dismiss
 
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 8)
+
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Preview
                     HStack {
                         Spacer()
-                        Image(systemName: icon)
+                        Image(systemName: icon.isEmpty ? "star.fill" : icon)
                             .font(.system(size: 60))
-                            .foregroundStyle(customColor)
+                            .foregroundStyle(selection)
                         Spacer()
                     }
-                    .padding(.vertical)
-                }
+                    .padding(.vertical, 10)
 
-                Section("Custom Color") {
-                    ColorPicker("Select Color", selection: $customColor, supportsOpacity: false)
-                        .labelsHidden()
+                    // Color Grid
+                    LazyVGrid(columns: columns, spacing: 8) {
+                        ForEach(0..<gridColors.count, id: \.self) { index in
+                            let color = gridColors[index]
+                            ColorGridCell(
+                                color: color,
+                                isSelected: isSelected(color)
+                            ) {
+                                selection = color
+                            }
+                        }
+                    }
                 }
+                .padding(.horizontal)
+                .padding(.vertical)
             }
-            .navigationTitle("Custom Color")
+            .navigationTitle("Choose Color")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -415,12 +396,52 @@ struct CustomColorPickerSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
-                        selection = customColor
                         dismiss()
                     }
                 }
             }
         }
+    }
+
+    private func isSelected(_ color: Color) -> Bool {
+        color.toHex()?.uppercased() == selection.toHex()?.uppercased()
+    }
+}
+
+struct ColorGridCell: View {
+    let color: Color
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            RoundedRectangle(cornerRadius: 6)
+                .fill(color)
+                .aspectRatio(1, contentMode: .fit)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(isSelected ? Color.primary : Color.clear, lineWidth: 3)
+                )
+                .overlay(
+                    Group {
+                        if isSelected {
+                            Image(systemName: "checkmark")
+                                .font(.caption.bold())
+                                .foregroundStyle(isLightColor(color) ? Color.black : Color.white)
+                        }
+                    }
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func isLightColor(_ color: Color) -> Bool {
+        guard let hex = color.toHex() else { return false }
+        let r = Int(hex.dropFirst(1).prefix(2), radix: 16) ?? 0
+        let g = Int(hex.dropFirst(3).prefix(2), radix: 16) ?? 0
+        let b = Int(hex.dropFirst(5).prefix(2), radix: 16) ?? 0
+        let brightness = 0.299 * Double(r) + 0.587 * Double(g) + 0.114 * Double(b)
+        return brightness > 128
     }
 }
 

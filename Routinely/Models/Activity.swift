@@ -70,19 +70,20 @@ class Activity {
     @MainActor
     static func addSamples(to context: ModelContext) {
         // Sample activity definitions with their schedule
+        // 64 web-safe colors from the picker palette (0x33, 0x66, 0x99, 0xCC for each channel)
         let samples: [(name: String, icon: String, color: String, slots: [(weekday: Int, timeSlot: TimeSlot)])] = [
             // Fill Water Bottle: All days, 06-09
             (
                 "Fill Water Bottle",
                 "drop.fill",
-                "#3498db", // Blue
+                "#3399CC", // Blue
                 Array(1...7).flatMap { day in [(day, .morning)] }
             ),
             // Bleach: Mon/06-09, Tue/09-12, Wed/06-09, Thu-Sun/06-09
             (
                 "Bleach",
                 "sparkles",
-                "#e74c3c", // Red
+                "#CC3333", // Red
                 [
                     (2, .morning),      // Mon 06-09
                     (3, .lateMorning),  // Tue 09-12
@@ -96,38 +97,45 @@ class Activity {
             // Clean/Organize Something: Tue/Thu/Fri/Sat/Sun, 09-12/12-15/15-18/18-21
             (
                 "Clean/Organize Something",
-                "tray.and.arrow.up.fill",
-                "#f39c12", // Orange
+                "arrow.3.trianglepath",
+                "#66CCFF", // Ice blue
                 [3, 5, 6, 7, 1].flatMap { day in
                     [.lateMorning, .afternoon, .lateAfternoon, .evening].map { (day, $0) }
                 }
+            ),
+            // Topz Around Sink: Sun/09-12
+            (
+                "Topz Around Sink",
+                "sink",
+                "#33CC99", // Mint
+                [1].map { ($0, .lateMorning) }
             ),
             // Absorption Block: Tue/Thu/Fri/Sat/Sun 09-12
             (
                 "Absorption Block",
                 "pills.fill",
-                "#9b59b6", // Purple
+                "#9966CC", // Purple
                 [3, 5, 6, 7, 1].map { ($0, .lateMorning) }
             ),
             // Multivitamin Block: Tue/Thu/Fri/Sat/Sun 12-15
             (
                 "Multivitamin Block",
                 "capsule.fill",
-                "#2ecc71", // Green
+                "#33CC66", // Green
                 [3, 5, 6, 7, 1].map { ($0, .afternoon) }
             ),
             // Fiber Block: Tue/Thu/Fri/Sat/Sun 15-18
             (
                 "Fiber Block",
                 "leaf.fill",
-                "#27ae60", // Dark Green
+                "#339966", // Dark Green
                 [3, 5, 6, 7, 1].map { ($0, .lateAfternoon) }
             ),
             // Minerals Block: Tue/Thu/Fri/Sat/Sun 21-00
             (
                 "Minerals Block",
                 "bolt.heart.fill",
-                "#34495e", // Dark Blue/Gray
+                "#336699", // Dark Blue/Gray
                 [3, 5, 6, 7, 1].map { ($0, .night) }
             ),
         ]
