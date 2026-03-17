@@ -122,7 +122,9 @@ struct CompleteActivityIntent: AppIntent {
         try context.save()
 
         // Update badge count for current time slot
-        await updateBadge(for: currentWeekday, timeSlot: timeSlotEnum, in: context)
+        // Schedule a silent notification to trigger the main app to update the badge
+        // (widget extension can't directly update the main app's badge)
+        await scheduleBadgeUpdateNotification(for: currentWeekday, timeSlot: timeSlotEnum, in: context)
 
         // Trigger widget timeline reload
         WidgetCenter.shared.reloadAllTimelines()
@@ -130,23 +132,40 @@ struct CompleteActivityIntent: AppIntent {
         return .result()
     }
 
-    private func updateBadge(for weekday: Int, timeSlot: TimeSlot, in context: ModelContext) async {
-        // Fetch activities for current slot
+    /// Schedule a silent notification to update the badge from the main app process
+    /// The widget extension cannot directly update the main app's badge
+    private func scheduleBadgeUpdateNotification(for weekday: Int, timeSlot: TimeSlot, in context: ModelContext) async {
+        // Calculate the incomplete count
         let descriptor = FetchDescriptor<ActivityTimeSlot>()
-        guard let allSlots = try? context.fetch(descriptor) else {
-            await MainActor.run {
-                UNUserNotificationCenter.current().setBadgeCount(0)
-            }
-            return
-        }
+        guard let allSlots = try? context.fetch(descriptor) else { return }
 
         let slots = allSlots.filter { $0.weekday == weekday && $0.timeSlot == timeSlot }
         let incompleteCount = slots.compactMap { $0.activity }.filter { activity in
             !activity.isCompleted(for: weekday, timeSlot: timeSlot)
         }.count
 
-        await MainActor.run {
-            UNUserNotificationCenter.current().setBadgeCount(incompleteCount)
+        // Schedule a silent notification that will be delivered to the main app
+        // This triggers the main app to update its badge
+        let content = UNMutableNotificationContent()
+        content.badge = NSNumber(value: incompleteCount)
+        content.sound = nil
+        content.title = ""
+        content.body = ""
+
+        // Deliver immediately (or as soon as possible)
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+
+        // Use unique identifier to avoid overwriting pending notifications
+        let request = UNNotificationRequest(
+            identifier: "badge-update-\(timeSlot.rawValue)-\(Int(Date().timeIntervalSince1970))",
+            content: content,
+            trigger: trigger
+        )
+
+        do {
+            try await UNUserNotificationCenter.current().add(request)
+        } catch {
+            // Silently fail - badge will update when app opens
         }
     }
 }
