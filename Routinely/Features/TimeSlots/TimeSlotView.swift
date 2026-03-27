@@ -30,8 +30,12 @@ struct TimeSlotView: View {
     var activitiesForCurrentSlot: [Activity] {
         allActivityTimeSlots
             .filter {
-                $0.weekday == currentWeekday &&
-                $0.timeSlot == timeSlot
+                // Check and clear expired punts
+                $0.checkAndClearExpiredPunt()
+                
+                // Match on weekday and effective time slot
+                return $0.weekday == currentWeekday &&
+                       $0.effectiveTimeSlot() == timeSlot
             }
             .compactMap { $0.activity }
             .sorted { $0.sortOrder < $1.sortOrder }
@@ -92,8 +96,13 @@ struct TimeSlotView: View {
                                     isCompleted: completedActivityIDs.contains(activity.id),
                                     onToggle: fetchActivityTimeSlots
                                 )
+                                .transition(.asymmetric(
+                                    insertion: .scale.combined(with: .opacity),
+                                    removal: .move(edge: .trailing).combined(with: .opacity)
+                                ))
                             }
                         }
+                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: visibleActivities.map { $0.id })
                         .padding(.horizontal)
                         .padding(.top, 16)
                     }
@@ -168,6 +177,9 @@ struct TimeSlotView: View {
         // Fetch time slots
         let slotDescriptor = FetchDescriptor<ActivityTimeSlot>()
         allActivityTimeSlots = (try? modelContext.fetch(slotDescriptor)) ?? []
+        
+        // Clear expired punts
+        clearExpiredPunts()
 
         // Fetch completions directly for current week
         let calendar = Calendar.current
@@ -184,6 +196,15 @@ struct TimeSlotView: View {
             $0.weekday == currentWeekday &&
             $0.timeSlot == timeSlot
         }.compactMap { $0.activity?.id })
+    }
+    
+    private func clearExpiredPunts() {
+        // Check all activity time slots and clear expired punts
+        for slot in allActivityTimeSlots {
+            slot.checkAndClearExpiredPunt()
+        }
+        // Save any changes
+        try? modelContext.save()
     }
 }
 
@@ -240,6 +261,11 @@ struct ActivityCompletionRow: View {
 
     @Environment(\.modelContext) private var modelContext
 
+    private var nextTimeSlot: TimeSlot {
+        let nextRawValue = (timeSlot.rawValue + 1) % TimeSlot.allCases.count
+        return TimeSlot(rawValue: nextRawValue) ?? .midnightTo3am
+    }
+
     var body: some View {
         HStack(spacing: 16) {
             CompletionButton(activity: activity, timeSlot: timeSlot, weekday: weekday, onToggle: onToggle)
@@ -266,6 +292,37 @@ struct ActivityCompletionRow: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(timeSlot.swiftUIColor.opacity(0.1))
         )
+        .contextMenu {
+            Button {
+                puntToNextTimeSlot()
+            } label: {
+                Label("Punt", systemImage: "arrow.forward")
+            }
+        }
+    }
+
+    private func puntToNextTimeSlot() {
+        // Find the ActivityTimeSlot for this activity/weekday/timeSlot combo
+        let descriptor = FetchDescriptor<ActivityTimeSlot>()
+        guard let allSlots = try? modelContext.fetch(descriptor) else { return }
+        
+        // Find the matching slot
+        if let slot = allSlots.first(where: { 
+            $0.activity?.id == activity.id && 
+            $0.weekday == weekday && 
+            $0.timeSlot == timeSlot 
+        }) {
+            // Punt it to the next time slot with animation
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                slot.punt(to: nextTimeSlot)
+                
+                // Save the context
+                try? modelContext.save()
+                
+                // Trigger refresh
+                onToggle?()
+            }
+        }
     }
 }
 

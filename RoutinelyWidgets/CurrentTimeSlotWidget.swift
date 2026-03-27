@@ -62,9 +62,13 @@ struct Provider: TimelineProvider {
             return SimpleEntry(date: date, timeSlot: currentTimeSlot, activities: [])
         }
 
-        // Filter for current weekday and time slot
+        // Filter for current weekday and time slot, considering punts
         let slots = allSlots.filter {
-            $0.weekday == currentWeekday && $0.timeSlot == currentTimeSlot
+            // Check and clear expired punts
+            $0.checkAndClearExpiredPunt()
+            
+            // Match on weekday and effective time slot
+            return $0.weekday == currentWeekday && $0.effectiveTimeSlot() == currentTimeSlot
         }
 
         // Build widget activities (only incomplete)
